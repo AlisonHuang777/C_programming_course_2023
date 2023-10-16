@@ -1,8 +1,4 @@
-.vscode/launch.json
-.bash_history
-.bash_logout
-.bash_profile
-.bashrc
-.profile
-alt.c
-alt.exe
+.*
+test.*
+alt.*
+*.stackdump
