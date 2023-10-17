@@ -7,7 +7,7 @@ int main() {
     bool noOutput=true;
     for (i=0; i<BOARD_SIZE; ++i)
         for (j=0; j<BOARD_SIZE; ++j)
-            scanf("%hhu",&(reversi[i][j]));
+            scanf("%hhu", &(reversi[i][j]));
     scanf("%hhu %hhu", &posX, &posY);
     sltDisk=reversi[posX][posY];
     if (sltDisk!=0)
@@ -20,12 +20,13 @@ int main() {
                         reversi[posX+i*k][posY+j*k]==sltDisk) break;
                     if (reversi[posX+i*k][posY+j*k]==0) {
                         if (k!=1) {
-                            printf("(%hhu,%hhu) ", posX+i*k, posY+j*k);
+                            if (!noOutput) printf(", ");
+                            printf("(%hhu,%hhu)", posX+i*k, posY+j*k);
                             noOutput=false;
                             }
                         break;
                     }
                 }
             }
-    if (noOutput) printf("None");
+    if (noOutput) printf("No valid places found.");
 }
