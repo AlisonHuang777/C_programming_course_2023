@@ -31,7 +31,7 @@ int main() {
             }
             if (found) break;
         if (found) printf("disk can be placed here.");
-        else printf("disk can\'t be placed here");
+        else printf("disk can\'t be placed here.");
         break;
     case 1:
         printf("The disk at (%hhu, %hhu) is black.\nNo new disk can be placed here.", posX, posY);
