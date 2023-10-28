@@ -2,105 +2,93 @@
 
 #include <stdio.h>
 
-#define MANUAL_INPUT 0 //for dubugging uses
+#define MANUAL_INPUT 1 //for dubugging uses
 #define BOARD_SIZE 8
 #define TOTAL_SLOTS BOARD_SIZE * BOARD_SIZE
+#define DISK_DATA_SIZE 2
 
-typedef short unsigned int disk8x;
+typedef short unsigned int disk8x; //each row of disks uses 16 bits or 2 bytes
+typedef char sint4;
 typedef enum diskType{EMPTY, BLACK, WHITE} diskType;
-typedef struct vec2{char x, y;} vec2;
+typedef struct vec2{sint4 x, y;} vec2;
 
-disk8x layout[BOARD_SIZE] = {0, 0, 0, 0b0000000110000000, 0b0000001001000000, 0, 0, 0};
+disk8x layout[BOARD_SIZE] = {0, 0, 0, 0, 0, 0, 0, 0};
 
 vec2 add(vec2 a, vec2 b) {return((vec2){a.x + b.x, a.y + b.y});}
 
-vec2 cstMtp(vec2 v, char n) {return((vec2){n * v.x, n * v.y});}
+vec2 constMul(vec2 v, sint4 n) {return((vec2){n * v.x, n * v.y});}
 
-diskType getDisk(vec2 pos) {return(layout[pos.x] >> 2*pos.y & 0b11);}
+sint4 areEqual(vec2 a, vec2 b) {return(a.x == b.x && a.y == b.y);}
+
+diskType getDisk(vec2 pos) {return(layout[pos.x] >> DISK_DATA_SIZE*pos.y & 0b11);}
 
 void setDisk(vec2 pos, diskType color) {
     disk8x data = 0, copy = layout[pos.x];
     for(int i = 0; i < BOARD_SIZE; ++i) {
         data |= (i == pos.y)? color: copy & 0b11;
-        data <<= 2;
-        copy = copy << 2 | copy >> 14;
+        data = data >> DISK_DATA_SIZE | data << DISK_DATA_SIZE * (BOARD_SIZE - 1);
+        copy = copy >> DISK_DATA_SIZE | copy << DISK_DATA_SIZE * (BOARD_SIZE - 1);
     }
     layout[pos.x] = data;
 }
 
-vec2 checkPlaceable(vec2 pos, vec2 dir) {
+vec2 checkPcb(vec2 pos, vec2 dir) { //hw4(?)
     for(int i = 1; i < BOARD_SIZE; ++i) {
         if( pos.x + i * dir.x < 0 || pos.x + i * dir.x >= BOARD_SIZE ||
             pos.y + i * dir.y < 0 || pos.y + i * dir.y >= BOARD_SIZE ||
-            getDisk(add(pos, cstMtp(dir, i))) == getDisk(pos)) return((vec2){-1, -1});
-        if (getDisk(add(pos, cstMtp(dir, i))) == EMPTY)
-            return((i == 1)? (vec2){-1, -1}: add(pos, cstMtp(dir, i)));
+            getDisk(add(pos, constMul(dir, i))) == getDisk(pos)) return((vec2){-1, -1});
+        if (getDisk(add(pos, constMul(dir, i))) == EMPTY)
+            return((i == 1)? (vec2){-1, -1}: add(pos, constMul(dir, i)));
     }
 }
 
 int main() {
     //initialize
-    vec2 blackPcb[TOTAL_SLOTS], whitePcb[TOTAL_SLOTS];
-    char blackPtr = 0, whitePtr = 0, temp;
-    for(int i = 0; i < TOTAL_SLOTS; ++i) {
-        blackPcb[i] = (vec2){-1, -1};
-        whitePcb[i] = (vec2){-1, -1};
-        }
+    vec2 pcbList[2][TOTAL_SLOTS];
+    sint4 listPtr[2] = {0, 0};
+    for(sint4 i = 0; i < TOTAL_SLOTS; ++i) {
+        pcbList[0][i] = (vec2){-1, -1};
+        pcbList[1][i] = (vec2){-1, -1};
+    }
 
     #if MANUAL_INPUT
     //input
-    for(char x = 0; x < BOARD_SIZE; ++x)
-        for(char y = 0; y < BOARD_SIZE; ++y) {
-            scanf("%hhd", &temp);
-            setDisk((vec2){x, y}, temp);
+    diskType input;
+    for(sint4 x = 0; x < BOARD_SIZE; ++x) for(sint4 y = 0; y < BOARD_SIZE; ++y) {
+            scanf("%d", &input);
+            if(input == EMPTY) continue;
+            setDisk((vec2){x, y}, input);
             }
     #endif
-
-    //check placeable locations for each disk types
-    for(char x = 0; x < BOARD_SIZE; ++x)
-        for(char y = 0; y < BOARD_SIZE; ++y)
-            for(char dx = -1; dx <= 1; ++dx)
-                for(char dy = -1; dy <= 1; ++dy) {
-                    if (dx == 0 && dy == 0) continue;
-                    switch (getDisk((vec2){x, y})) {
-                    case BLACK:
-                        blackPcb[blackPtr] = checkPlaceable((vec2){x, y}, (vec2){dx, dy});
-                        if(blackPcb[blackPtr].x == -1) continue;
-                        ++blackPtr;
-                        for(char i = 0; i < blackPtr - 1; ++i)
-                            if(blackPcb[i].x == blackPcb[blackPtr].x && blackPcb[i].y == blackPcb[blackPtr].y) {
-                                --blackPtr;
-                                blackPcb[blackPtr] = (vec2){-1, -1};
-                                break;
-                            }
-                        break;
-                    case WHITE:
-                        whitePcb[whitePtr] = checkPlaceable((vec2){x, y}, (vec2){dx, dy});
-                        if(whitePcb[whitePtr].x == -1) continue;
-                        ++whitePtr;
-                        for(char i = 0; i < whitePtr - 1; ++i)
-                            if(whitePcb[i].x == whitePcb[whitePtr].x && whitePcb[i].y == whitePcb[whitePtr].y) {
-                                --whitePtr;
-                                whitePcb[whitePtr] = (vec2){-1, -1};
-                                break;
-                            }
-                        break;
-                    default:
-                        continue;
-                    }
-                }
     
-    //output
-    printf("Black disks placeable at: ");
-    if(blackPcb[0].x == -1) printf("None");
-    else for(char i = 0; i < blackPtr; ++i) {
-        if (i != 0) printf(", ");
-        printf("(%hhd, %hhd)", blackPcb[i].x, blackPcb[i].y);
+    //check for placeable slots
+    #define idx getDisk(pos)-1
+    for(sint4 i = 0; i < TOTAL_SLOTS; ++i) for(sint4 j = 0; j < 8; ++j) {
+        vec2 pos = {i / 8, i % 8}, dir = {(j < 4)? j / 3 - 1: (j + 1) / 3 - 1, (j < 4)? j % 3 - 1: (j + 1) % 3 - 1};
+        if (getDisk(pos) == EMPTY) continue;
+        pcbList[idx][listPtr[idx]] = checkPcb(pos, dir);
+        if(pcbList[idx][listPtr[idx]].x == -1) continue;
+        ++listPtr[idx];
+        for(sint4 k = 0; k < listPtr[idx] - 1; ++k)
+            if(areEqual(pcbList[idx][k], pcbList[idx][listPtr[idx]])) {
+                --listPtr[idx];
+                pcbList[idx][listPtr[idx]] = (vec2){-1, -1};
+                break;
+            }
     }
-    printf("\nWhite disks placeable at: ");
-    if(whitePcb[0].x == -1) printf("None");
-    else for(char i = 0; i < whitePtr; ++i) {
-        if (i != 0) printf(", ");
-        printf("(%hhd, %hhd)", whitePcb[i].x, whitePcb[i].y);
+    #undef idx
+
+    //output
+    printf(  "Black(1) disk(s) is/are placeable at: ");
+    if (pcbList[0][0].x == -1) printf("(None).");
+    else for(sint4 i = 0; i < listPtr[0]; ++i) {
+        printf("(%hhd, %hhd)", pcbList[0][i].x, pcbList[0][i].y);
+        (i == listPtr[0] - 1)? printf("."): printf(", ");
+    }
+    printf("\nWhite(2) disk(s) is/are placeable at: ");
+    if (pcbList[1][0].x == -1) printf("(None).");
+    else for(sint4 i = 0; i < listPtr[1]; ++i) {
+        printf("(%hhd, %hhd)", pcbList[1][i].x, pcbList[1][i].y);
+        (i == listPtr[1] - 1)? printf("."): printf(", ");
     }
 }
