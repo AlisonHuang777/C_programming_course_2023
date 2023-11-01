@@ -18,11 +18,11 @@ vec2 add(vec2 a, vec2 b) {return((vec2){a.x + b.x, a.y + b.y});}
 
 vec2 constMul(vec2 v, sint4 n) {return((vec2){n * v.x, n * v.y});}
 
-sint4 areEqual(vec2 a, vec2 b) {return(a.x == b.x && a.y == b.y);}
+sint4 equal(vec2 a, vec2 b) {return(a.x == b.x && a.y == b.y);}
 
-diskType getDisk(vec2 pos) {return(layout[pos.x] >> DISK_DATA_SIZE*pos.y & 0b11);}
+diskType getDisk(vec2 pos) {return(layout[pos.x] >> DISK_DATA_SIZE * pos.y & 0b11);}
 
-void setDisk(vec2 pos, diskType color) {
+void setDisk(vec2 pos, diskType color) { //may need optimization
     disk8x data = 0, copy = layout[pos.x];
     for(int i = 0; i < BOARD_SIZE; ++i) {
         data |= (i == pos.y)? color: copy & 0b11;
@@ -70,7 +70,7 @@ int main() {
         if(pcbList[idx][listPtr[idx]].x == -1) continue;
         ++listPtr[idx];
         for(sint4 k = 0; k < listPtr[idx] - 1; ++k)
-            if(areEqual(pcbList[idx][k], pcbList[idx][listPtr[idx]])) {
+            if(equal(pcbList[idx][k], pcbList[idx][listPtr[idx]])) {
                 --listPtr[idx];
                 pcbList[idx][listPtr[idx]] = (vec2){-1, -1};
                 break;
