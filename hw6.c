@@ -2,58 +2,56 @@
 
 #define BOARD_SIZE 8
 #define TOTAL_SLOTS 64
-#define DISK_DATA_SIZE 2
 
 typedef unsigned short uint16;
 typedef char sint8;
 typedef enum diskType{EMPTY, BLACK, WHITE} diskType;
 typedef struct pcbLoc{sint8 posX, posY, potential;} pcbLoc;
 
-diskType getDisk(uint16 layout[BOARD_SIZE], sint8 x, sint8 y) {
-    return(layout[x] >> DISK_DATA_SIZE * y & 0b11);
-}
+#define dbs 2 //disk bit size: the least bit size required to represent all the possible states of a disk
+diskType getDisk(uint16 bd[BOARD_SIZE], sint8 x, sint8 y) {return(bd[x] >> dbs * y & 3);}
+void setDisk(uint16 bd[BOARD_SIZE], sint8 x, sint8 y, diskType clr) {bd[x] = bd[x] & ~(3 << y * dbs) | clr << y * dbs;}
+#undef dbs
 
-void setDisk(uint16 layout[BOARD_SIZE], sint8 x, sint8 y, diskType clr) {
-    layout[x] = layout[x] & ~(0b11 << y * DISK_DATA_SIZE) | clr << y * DISK_DATA_SIZE;
-}
-
-//"functions" of function
-#define x i/8
-#define y i%8
-#define dx ((j<4)?j/3-1:(j+1)/3-1) //direction of x
-#define dy ((j<4)?j%3-1:(j+1)%3-1) //direction of y
-#define xd x+k*dx                  //x displaced
-#define yd y+k*dy                  //y displaced
-#define pos x,y                    //position
-#define dpp xd,yd                  //displaced position
-#define gd getDisk
-#define idx gd(layout,dpp)-1
+#define ip i/8                      //index of position
+#define id i%8                      //index of direction
+#define x ip/8                      //x position
+#define y ip%8                      //y position
+#define dx (id<4)?id/3-1:(id+1)/3-1 //x direction
+#define dy (id<4)?id%3-1:(id+1)%3-1 //y direction
+#define xd x+s*(dx)                 //x displaced
+#define yd y+s*(dy)                 //y displaced
+#define pos x,y                     //position
+#define dpp xd,yd                   //displaced position
+#define gd getDisk                  //abbreviated name for getDisk()
+#define idx gd(layout,dpp)-1        //convert diskType index to pcbList index
+#define p s-1                       //potential: the amount of flippable disks
 void checkPcb(uint16 layout[BOARD_SIZE], pcbLoc pcbList[2][TOTAL_SLOTS]) {
-    sint8 listPtr[2] = {0, 0};
-    for(sint8 i = 0; i < TOTAL_SLOTS; ++i) {
+    for(sint8 i = 0; i < TOTAL_SLOTS * 8; ++i) {
         if (gd(layout, pos) == EMPTY) continue;
-        for(sint8 j = 0; j < 8; ++j) {
-            for(sint8 k = 0; k < BOARD_SIZE; ++k) {
-                if (xd < 0 || xd >= BOARD_SIZE ||
-                    yd < 0 || yd >= BOARD_SIZE ||
-                    gd(layout, dpp) == gd(layout, pos)) break;
-                if (gd(layout, dpp) == EMPTY) {
-                    if(k == 1) break;
-                    pcbList[idx][listPtr[idx]] = (pcbLoc){xd, yd, k - 1};
-                    ++listPtr[idx];
-                    for(sint8 l = 0; l < listPtr[idx]; ++l) {
-                        if(pcbList[idx][l].posX == xd && pcbList[idx][l].posY == yd) {
-                            pcbList[idx][l].potential += k - 1;
-                            --listPtr[idx];
-                            break;
-                        }
+        for(sint8 s = 0; s < BOARD_SIZE; ++s) {
+            if (xd < 0 || xd >= BOARD_SIZE ||
+                yd < 0 || yd >= BOARD_SIZE ||
+                gd(layout, dpp) == gd(layout, pos)) break;
+            if (gd(layout, dpp) == EMPTY) {
+                if(s == 1) break;
+                for(sint8 i_ = 0; i_ < TOTAL_SLOTS; ++i_) {
+                    if(pcbList[idx][i_].posX == xd && pcbList[idx][i_].posY == yd) {
+                        pcbList[idx][i_].potential += p;
+                        break;
                     }
-                    break;
+                    else if(pcbList[idx][i_].potential == 0) {
+                        pcbList[idx][i_] = (pcbLoc){dpp, p};
+                        break;
+                    }
                 }
+                break;
             }
         }
     }
 }
+#undef ip
+#undef id
 #undef x
 #undef y
 #undef dx
@@ -64,3 +62,4 @@ void checkPcb(uint16 layout[BOARD_SIZE], pcbLoc pcbList[2][TOTAL_SLOTS]) {
 #undef dpp
 #undef gd
 #undef idx
+#undef p
