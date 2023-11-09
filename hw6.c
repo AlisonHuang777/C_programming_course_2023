@@ -1,19 +1,24 @@
+#include <stdlib.h>
+#include <stdint.h>
 #include <stdio.h>
+#include <time.h>
 
 #define BOARD_SIZE 8
 #define TOTAL_SLOTS BOARD_SIZE*BOARD_SIZE
 #define DIRECTIONS 8
-#define DISK_TYPES 2
 
-typedef unsigned short uint16;
-typedef unsigned char uint8;
 typedef enum diskType{EMPTY, BLACK, WHITE} diskType;
-typedef struct placeableLocation{uint8 posX, posY, potential, dirFlag;} pcbLoc;
+typedef struct placeableLocation{uint8_t posX, posY, potential, dirFlag;} pcbLoc;
 
-#define dbs 2 //disk bit size: the least bit size required to represent all the possible states of a disk
-diskType getDisk(uint16 bd[BOARD_SIZE], uint8 x, uint8 y) {return(bd[x] >> dbs * y & 3);}
-void setDisk(uint16 bd[BOARD_SIZE], uint8 x, uint8 y, diskType clr) {bd[x] = bd[x] & ~(3 << y * dbs) | clr << y * dbs;}
-#undef dbs
+#define DBS 2 //disk bit size: the least bit size required to represent all the possible states of a disk
+diskType getDisk(uint16_t layout[BOARD_SIZE], uint8_t x, uint8_t y) {
+    return(layout[x] >> DBS * y & 0b11);
+}
+
+void setDisk(uint16_t layout[BOARD_SIZE], uint8_t x, uint8_t y, diskType clr) {
+    layout[x] = layout[x] & ~(0b11 << y * DBS) | clr << y * DBS;
+}
+#undef DBS
 
 #define ip i/DIRECTIONS               //index of position
 #define id i%DIRECTIONS               //index of direction
@@ -27,18 +32,17 @@ void setDisk(uint16 bd[BOARD_SIZE], uint8 x, uint8 y, diskType clr) {bd[x] = bd[
 #define dpp xd,yd                     //displaced position
 #define gd getDisk                    //abbreviated name for getDisk()
 #define pot s-1                       //potential: the amount of flippable disks
-void checkPcb(uint16 layout[BOARD_SIZE], pcbLoc pcbList[TOTAL_SLOTS], diskType color) {
-    for(uint16 i = 0; i < TOTAL_SLOTS * DIRECTIONS; ++i) {
+#define OUT_BOUND xd<0||xd>BOARD_SIZE-1||yd<0||yd>BOARD_SIZE-1
+void checkPcb(uint16_t layout[BOARD_SIZE], pcbLoc pcbList[TOTAL_SLOTS], diskType color) {
+    for(uint16_t i = 0; i < TOTAL_SLOTS * DIRECTIONS; ++i) {
         if (gd(layout, pos) != EMPTY) {
             i += DIRECTIONS - 1;
             continue;
         }
-        for(uint8 s = 1; s < BOARD_SIZE; ++s) {
-            if (xd < 0 || xd >= BOARD_SIZE ||
-                yd < 0 || yd >= BOARD_SIZE ||
-                gd(layout, dpp) == EMPTY) break;
-            if (gd(layout, dpp) == color) {
-                for(uint8 i_ = 0; i_ < TOTAL_SLOTS; ++i_) {
+        for(uint8_t s = 1; s < BOARD_SIZE; ++s) {
+            if(OUT_BOUND || gd(layout, dpp) == EMPTY) break;
+            if(gd(layout, dpp) == color) {
+                for(uint8_t i_ = 0; i_ < TOTAL_SLOTS; ++i_) {
                     if(pcbList[i_].posX == x && pcbList[i_].posY == y) {
                         pcbList[i_].potential += pot;
                         pcbList[i_].dirFlag |= 1 << id;
@@ -62,18 +66,21 @@ void checkPcb(uint16 layout[BOARD_SIZE], pcbLoc pcbList[TOTAL_SLOTS], diskType c
 #undef dy
 #undef gd
 #undef pot
+
 #define x selected.posX
 #define y selected.posY
 #define dx ((d<4)?d/3-1:(d+1)/3-1)
 #define dy ((d<4)?d%3-1:(d+1)%3-1)
-#define clr selected.potential //color
-void update(uint16 layout[BOARD_SIZE], pcbLoc selected) {
-    setDisk(layout, pos, clr);
-    for(uint8 d = 0; d < DIRECTIONS; ++d) {
+void update(uint16_t layout[BOARD_SIZE], pcbLoc selected, diskType color, uint8_t counter[2]) {
+    setDisk(layout, pos, color);
+    ++counter[color - 1];
+    for(uint8_t d = 0; d < DIRECTIONS; ++d) {
         if ((selected.dirFlag >> d & 1) == 0) continue;
-        for(uint8 s = 1; s < BOARD_SIZE; ++s) {
-            if(getDisk(layout, dpp) == clr) break;
-            setDisk(layout, dpp, clr);
+        for(uint8_t s = 1; s < BOARD_SIZE; ++s) {
+            if(getDisk(layout, dpp) == color) break;
+            setDisk(layout, dpp, color);
+            ++counter[color - 1];
+            --counter[(color ^ 0b11) - 1];
         }
     }
 }
@@ -86,66 +93,136 @@ void update(uint16 layout[BOARD_SIZE], pcbLoc selected) {
 #undef pos
 #undef dpp
 
+uint8_t cptChoice(pcbLoc chs[TOTAL_SLOTS]) {
+    uint8_t maxPot = 0, nBst = 0, bstIdx[TOTAL_SLOTS];
+    for(uint8_t i = 0; i < TOTAL_SLOTS; ++i) {
+        if(chs[i].potential == 0) break;
+        maxPot = (chs[i].potential > maxPot)? chs[i].potential: maxPot;
+    }
+    for(uint8_t i = 0, i_ = 0; i < TOTAL_SLOTS; ++i) {
+        if(chs[i].potential == 0) break;
+        if(chs[i].potential == maxPot) {
+            bstIdx[i_] = i;
+            ++nBst;
+            ++i_;
+        }
+    }
+    return(bstIdx[rand() % nBst]);
+}
+
+//configurations
+#define BLACK_SYMBOL "><" //symbol for rendering black disks
+#define WHITE_SYMBOL "[]" //symbol for rendering white disks
+#define PRINT_PCB_INFO 0  //whether or not to show info about placeable locations
+#define DELAY 100         //milliseconds between each loop for simulation mode
+
 int main() {
+    
     //initialize
-    uint16 board[BOARD_SIZE] = {0, 0, 0, 576, 384, 0, 0, 0};
-    uint8 choice;
+    uint8_t gameMode, turns = 0, choice, totalDisks[2] = {2, 2};
+    uint16_t board[BOARD_SIZE] = {0, 0, 0, 576, 384, 0, 0, 0};
+    clock_t timestamp;
     pcbLoc choices[TOTAL_SLOTS] = {};
     diskType curPlayer = BLACK;
+    printf("This program is not responsible for undefined inputs.\n");
+    srand(time(NULL));
+
+    //input gameMode
+    printf("Pick a game mode:\n"
+           "\t0 for PvP (multiplayer),\n"
+           "\t1 for CvP (computer goes first),\n"
+           "\t2 for PvC (player goes first),\n"
+           "\t3 for CvC (simulation).\n> ");
+    scanf("%hhu", &gameMode);
+    printf("\n");
 
     //main loop
     for(;;) {
+
+        //check valid choices for current player
         checkPcb(board, choices, curPlayer);
 
         //print board
         #define x i/BOARD_SIZE
         #define y i%BOARD_SIZE
-        printf(" y 0 1 2 3 4 5 6 7\nx\\________________\n");
-        for(uint8 i = 0; i < TOTAL_SLOTS; ++i) {
-            if(y == 0) printf("%hhu|", x);
-            for(uint8 i_ = 0; i_ < TOTAL_SLOTS; ++i_) {
-                if(choices[i_].potential == 0) break;
-                if(choices[i_].posX == x && choices[i_].posY == y) {
-                    printf("%02hhu", i_);
-                    goto skipDefaultRendering; //forgive me
-                }
+        printf("  y 0 1 2 3 4 5 6 7\nx  ________________\n");
+        for(uint8_t i = 0, i_ = 0; i < TOTAL_SLOTS; ++i) {
+            if(y == 0) printf("%hhu |", x);
+            if(choices[i_].potential != 0 && choices[i_].posX == x && choices[i_].posY == y) {
+                printf("%02hhu", i_);
+                ++i_;
             }
-            switch (getDisk(board, x, y)){
-                case EMPTY: printf("  "); break;
-                case BLACK: printf("><"); break;
-                case WHITE: printf("[]"); break;
+            else switch (getDisk(board, x, y)){
+                case EMPTY: printf("  ");         break;
+                case BLACK: printf(BLACK_SYMBOL); break;
+                case WHITE: printf(WHITE_SYMBOL); break;
                 default:    printf("ER");
             }
-            skipDefaultRendering:
             if(y == BOARD_SIZE - 1) printf("\n");
         }
-        printf("__________________\n");
+        printf("===================\n<Turn #%02hhu> P1\"" BLACK_SYMBOL "\" %02hhu - %02hhu \"" WHITE_SYMBOL "\"P2\n",
+               turns++, totalDisks[0], totalDisks[1]);
         #undef x
         #undef y
 
+        //exits if no valid choices
+        if(choices[0].potential == 0) break;
+
         //print choices
-        printf("<player%d>", curPlayer);
-        for(uint8 i = 0; i < TOTAL_SLOTS; ++i) {
-            if(choices[i].potential == 0) break;
-            printf("(%hhu, %hhu, %hhu)", choices[i].posX, choices[i].posY, choices[i].potential);
+        printf("[Player %d\'s turn] Disk symbol: \"", curPlayer);
+        if(curPlayer == BLACK) printf(BLACK_SYMBOL);
+        else                   printf(WHITE_SYMBOL);
+        printf("\"\n");
+        #if PRINT_PCB_INFO
+            for(uint8_t i = 0; i < TOTAL_SLOTS; ++i) {
+                if(choices[i].potential == 0) break;
+                printf("\t#%02hhu: (%hhu, %hhu), %hhu;\n", i, choices[i].posX, choices[i].posY, choices[i].potential);
+            }
+        #endif
+        printf("> ");
+
+        //for simulation mode delay between each cycle
+        #if DELAY > 0
+        if(gameMode == 3) {
+            timestamp = clock();
+            while(clock() < timestamp + DELAY) {;}
         }
+        #endif
+
+        //input choice
+        if((gameMode >> curPlayer - 1 & 1) == 1) {
+            choice = cptChoice(choices);
+            printf("%hhu (by computer)\n", choice);
+        }
+        else scanf("%hhu", &choice);
         printf("\n");
 
-        //input
-        printf("<test>");
-        scanf("%hhu", &choice);
-
         //update board
-        choices[choice].potential = curPlayer;
-        update(board, choices[choice]);
+        update(board, choices[choice], curPlayer, totalDisks);
 
         //change player
-        curPlayer = (curPlayer == 1)? 2: 1;
+        curPlayer ^= 0b11;
 
         //clear choices
-        for(uint8 i = 0; i < TOTAL_SLOTS; ++i) {
+        for(uint8_t i = 0; i < TOTAL_SLOTS; ++i) {
             if(choices[i].potential == 0) break;
             choices[i] = (pcbLoc){0, 0, 0, 0};
         }
     }
+
+    //game over
+    printf("[GAMEOVER] ");
+    if(totalDisks[0] == totalDisks[1]) printf("Tie.");
+    if(totalDisks[0] >  totalDisks[1]) printf("Player 1 wins!");
+    else                               printf("Player 2 wins!");
 }
+
+/*
+The code for delay (line 186 ~ 189) requires re-work;
+for some reason the time interval of the delay is somewhat inconsistent,
+and it also takes a lot of computational power for the "do nothing" part (line 188).
+Currently I have no idea how to improve it.
+Also, line 182 is expected to print stuff before delay,
+but for whatever reason it's not doint that.
+Maybe it has something to do with buffer?
+*/
