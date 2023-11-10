@@ -114,7 +114,7 @@ uint8_t cptChoice(pcbLoc chs[TOTAL_SLOTS]) {
 #define BLACK_SYMBOL "><" //symbol for rendering black disks
 #define WHITE_SYMBOL "[]" //symbol for rendering white disks
 #define PRINT_PCB_INFO 0  //whether or not to show info about placeable locations
-#define DELAY 100         //milliseconds between each loop for simulation mode
+#define DELAY 0           //milliseconds between each loop for simulation mode
 
 int main() {
     
