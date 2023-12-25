@@ -6,9 +6,6 @@
 #define WALL 1
 #define TAKN 2
 
-#define DEBUGGING 1
-
-#if DEBUGGING
 void output(uint8_t maze[MAZE_SIZE][MAZE_SIZE], Stack *memory) {
     printf("maze:\n");
     for(uint32_t i = 0; i < MAZE_SIZE; ++i) {
@@ -25,7 +22,6 @@ void output(uint8_t maze[MAZE_SIZE][MAZE_SIZE], Stack *memory) {
     for(uint64_t i = 0; i < memory->pointer + 1; ++i)
         printf("(%u, %u)\n", memory->stack[i].x, memory->stack[i].y);
 }
-#endif
 
 int main() {
     //initialize
