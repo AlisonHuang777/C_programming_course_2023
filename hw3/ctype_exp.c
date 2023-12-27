@@ -25,9 +25,9 @@ void append(String *str, char c) {
 void printStr(String *str) {
     for(unsigned i = 0; i < str->len; ++i)
         printf("%c", *(str->ptr + i));
-    //printf("\n"); disabled
+    //printf("\n"); //disabled
 }
-#pragma endregion
+#pragma endregion //I know string.h exists so what
 
 int main() {
     String *text = initStr();
